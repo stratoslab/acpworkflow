@@ -1,0 +1,40 @@
+module Test where
+
+import Daml.Script
+import Main
+
+-- | Auto-Generated Setup Script
+setup : Script ()
+setup = script do
+  bridgeRelay <- allocateParty "Bridge Relay"
+  client <- allocateParty "Client"
+  evaluator <- allocateParty "Evaluator"
+  provider <- allocateParty "Provider"
+
+  processCid <- submit bridgeRelay do
+    createCmd Main.Proc_ClientProcess with
+      processId = "test-001"
+      currentState = "Start_Client"
+      bridgeRelay = bridgeRelay
+      client = client
+      evaluator = evaluator
+      provider = provider
+      amount = None
+      baseJobId = None
+      budget = None
+      cantonObligationId = None
+      currency = None
+      deliverableHash = None
+      deliverableUri = None
+      description = None
+      evaluationScore = None
+      evaluatorFee = None
+      expiredAt = None
+      platformFee = None
+      providerPayout = None
+      reason = None
+      rejectionReason = None
+      relaySignature = None
+      usdcAmount = None
+
+  return ()

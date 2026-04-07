@@ -1,0 +1,20 @@
+sdk-version: 2.9.5
+name: Proc_Client
+source: daml
+version: 1.0.0
+dependencies:
+  - daml-stdlib
+  - daml-prim
+  - daml-script
+data-dependencies:
+  # Daml Finance V4 — run ./scripts/get-dependencies.sh to download
+  - .dars/daml-finance-interface-types-common-2.0.0.dar
+  - .dars/daml-finance-interface-holding-3.0.0.dar
+  - .dars/daml-finance-interface-util-2.1.0.dar
+  - .dars/daml-finance-interface-account-3.0.0.dar
+  - .dars/daml-finance-interface-instrument-base-3.0.0.dar
+  - .dars/daml-finance-interface-instrument-token-3.0.0.dar
+  - .dars/daml-finance-holding-3.0.1.dar
+  - .dars/daml-finance-util-3.1.0.dar
+  - .dars/daml-finance-account-3.0.0.dar
+  - .dars/daml-finance-instrument-token-3.0.0.dar

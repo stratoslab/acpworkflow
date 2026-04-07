@@ -1,0 +1,248 @@
+-- CantonFlow Auto-Generated Daml Module
+-- Generated from normalized Workflow IR
+-- WARNING: Review signatory/controller/observer assignments before deployment
+
+module Main where
+
+import DA.Optional
+import DA.Set (fromList)
+import Assets
+
+-- Valid states: "Start_Client", "Task_CreateObligation", "Task_ReceiveSettlement", "Task_LockFunds", "Task_CreateBaseJob", "Task_ProveCantonFunding", "Task_FundBaseEscrow", "Task_ConfirmBridged", "Task_ConfirmSettled", "Task_ReceiveJobFunded", "Task_SubmitWork", "Task_ReceivePayment", "Task_ReviewDeliverable", "Task_SettleOnBase", "Task_RejectOnBase", "GW_Evaluation", "End_Client", "End_Relay", "End_Provider", "End_Approved", "End_Rejected"
+
+template Proc_ClientProcess
+  with
+    processId : Text
+    currentState : Text
+    bridgeRelay : Party
+    client : Party
+    evaluator : Party
+    provider : Party
+    amount : Optional Decimal
+    baseJobId : Optional Int
+    budget : Optional Decimal
+    cantonObligationId : Optional Text
+    currency : Optional Text
+    deliverableHash : Optional Text
+    deliverableUri : Optional Text
+    description : Optional Text
+    evaluationScore : Optional Int
+    evaluatorFee : Optional Decimal
+    expiredAt : Optional Time
+    platformFee : Optional Decimal
+    providerPayout : Optional Decimal
+    reason : Optional Text
+    rejectionReason : Optional Text
+    relaySignature : Optional Text
+    usdcAmount : Optional Decimal
+  where
+    signatory [bridgeRelay, client, evaluator, provider]
+    observer [bridge Relay, client, evaluator, provider]
+
+    choice Initiate_Agent Job Needed : ContractId Proc_ClientProcess
+      controller bridgeRelay
+      do
+        assert (currentState == "Start_Client")
+        create this with
+          currentState = "Task_CreateObligation"
+
+    nonconsuming choice Create Payment Obligation : ContractId Proc_ClientProcess
+      with
+        description_input : Text
+        amount_input : Decimal
+        currency_input : Text
+        expiredAt_input : Time
+      controller client
+      do
+        assert (currentState == "Task_CreateObligation")
+        create this with
+          currentState = "Task_LockFunds"
+          description = Some description_input
+          amount = Some amount_input
+          currency = Some currency_input
+          expiredAt = Some expiredAt_input
+
+    choice Receive Settlement Confirmation : ContractId Proc_ClientProcess
+      controller client
+      do
+        assert (currentState == "Task_ReceiveSettlement")
+        create this with
+          currentState = "End_Client"
+
+    -- | Lock: freeze holding (Daml Finance Lockable.Acquire pattern)
+    choice LockWrappedUSDC : ContractId Proc_ClientProcess
+      with
+        holdingCid : ContractId WrappedUSDCHolding
+        newLockers : Assets.Parties
+        context : Text
+      controller client
+      do
+        assert (currentState == "Task_LockFunds")
+        exercise holdingCid Acquire with
+          newLockers
+          context
+          lockType = Assets.Lockable.Semaphore
+        create this with
+          currentState = "Task_ReceiveSettlement"
+
+    nonconsuming choice Create Job on Base (ERC-8183) : ContractId Proc_ClientProcess
+      with
+        baseJobId_input : Int
+        cantonObligationId_input : Text
+      controller bridgeRelay
+      do
+        assert (currentState == "Task_CreateBaseJob")
+        create this with
+          currentState = "Task_ProveCantonFunding"
+          baseJobId = Some baseJobId_input
+          cantonObligationId = Some cantonObligationId_input
+
+    nonconsuming choice Submit Canton Funding Proof : ContractId Proc_ClientProcess
+      with
+        relaySignature_input : Text
+      controller bridgeRelay
+      do
+        assert (currentState == "Task_ProveCantonFunding")
+        create this with
+          currentState = "Task_FundBaseEscrow"
+          relaySignature = Some relaySignature_input
+
+    -- | Transfer: move holding to new owner (Daml Finance Transferable.Transfer pattern)
+    choice TransferWrappedUSDC : ContractId Proc_ClientProcess
+      with
+        holdingCid : ContractId WrappedUSDCHolding
+        newOwnerAccount : Assets.AccountKey
+      controller bridgeRelay
+      do
+        assert (currentState == "Task_FundBaseEscrow")
+        exercise holdingCid Transfer with
+          actors = fromList [bridgeRelay]
+          newOwnerAccount
+        create this with
+          currentState = "Task_ConfirmBridged"
+
+    nonconsuming choice Confirm Bridged on Canton : ContractId Proc_ClientProcess
+      with
+        baseJobId_input : Int
+      controller bridgeRelay
+      do
+        assert (currentState == "Task_ConfirmBridged")
+        create this with
+          currentState = "Task_ConfirmSettled"
+          baseJobId = Some baseJobId_input
+
+    choice Confirm Settled on Canton : ContractId Proc_ClientProcess
+      controller bridgeRelay
+      do
+        assert (currentState == "Task_ConfirmSettled")
+        create this with
+          currentState = "End_Relay"
+
+    nonconsuming choice Receive Funded Job : ContractId Proc_ClientProcess
+      with
+        budget_input : Decimal
+      controller provider
+      do
+        assert (currentState == "Task_ReceiveJobFunded")
+        create this with
+          currentState = "Task_SubmitWork"
+          budget = Some budget_input
+
+    nonconsuming choice Submit Deliverable : ContractId Proc_ClientProcess
+      with
+        deliverableHash_input : Text
+        deliverableUri_input : Text
+      controller provider
+      do
+        assert (currentState == "Task_SubmitWork")
+        create this with
+          currentState = "Task_ReceivePayment"
+          deliverableHash = Some deliverableHash_input
+          deliverableUri = Some deliverableUri_input
+
+    choice Receive USDC Payment : ContractId Proc_ClientProcess
+      controller provider
+      do
+        assert (currentState == "Task_ReceivePayment")
+        create this with
+          currentState = "End_Provider"
+
+    nonconsuming choice Review Deliverable : ContractId Proc_ClientProcess
+      with
+        evaluationScore_input : Int
+        reason_input : Text
+      controller evaluator
+      do
+        assert (currentState == "Task_ReviewDeliverable")
+        create this with
+          currentState = "GW_Evaluation"
+          evaluationScore = Some evaluationScore_input
+          reason = Some reason_input
+
+    nonconsuming choice Complete Job (Release USDC) : ContractId Proc_ClientProcess
+      with
+        providerPayout_input : Decimal
+        platformFee_input : Decimal
+        evaluatorFee_input : Decimal
+      controller evaluator
+      do
+        assert (currentState == "Task_SettleOnBase")
+        create this with
+          currentState = "End_Approved"
+          providerPayout = Some providerPayout_input
+          platformFee = Some platformFee_input
+          evaluatorFee = Some evaluatorFee_input
+
+    nonconsuming choice Reject Job (Refund) : ContractId Proc_ClientProcess
+      with
+        rejectionReason_input : Text
+      controller evaluator
+      do
+        assert (currentState == "Task_RejectOnBase")
+        create this with
+          currentState = "End_Rejected"
+          rejectionReason = Some rejectionReason_input
+
+    choice Acceptable?_Yes : ContractId Proc_ClientProcess
+      controller evaluator
+      do
+        assert (currentState == "GW_Evaluation")
+        create this with
+          currentState = "Task_SettleOnBase"
+
+    choice Acceptable?_No : ContractId Proc_ClientProcess
+      controller evaluator
+      do
+        assert (currentState == "GW_Evaluation")
+        create this with
+          currentState = "Task_RejectOnBase"
+
+    choice Job Complete : ()
+      controller bridgeRelay, client, evaluator, provider
+      do
+        assert (currentState == "End_Client")
+        return ()
+
+    choice Relay Done : ()
+      controller bridgeRelay, client, evaluator, provider
+      do
+        assert (currentState == "End_Relay")
+        return ()
+
+    choice Paid : ()
+      controller bridgeRelay, client, evaluator, provider
+      do
+        assert (currentState == "End_Provider")
+        return ()
+
+    choice Settled : ()
+      controller bridgeRelay, client, evaluator, provider
+      do
+        assert (currentState == "End_Approved")
+        return ()
+
+    choice Refunded : ()
+      controller bridgeRelay, client, evaluator, provider
+      do
+        assert (currentState == "End_Rejected")
+        return ()

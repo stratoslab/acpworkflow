@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions
+  xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+  xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+  targetNamespace="https://cantonflow.dev/camunda">
+
+  <bpmn:process id="Proc_Client" name="Proc_Client" isExecutable="true">
+    <bpmn:userTask id="Task_CreateObligation" name="Create Payment Obligation">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="damlChoice">CreatePaymentObligation</camunda:inputParameter>
+          <camunda:inputParameter name="damlTemplate">Proc_ClientProcess</camunda:inputParameter>
+          <camunda:inputParameter name="controller">Client</camunda:inputParameter>
+        </camunda:inputOutput>
+        <camunda:formData>
+          <camunda:formField id="description" label="description" type="string" />
+          <camunda:formField id="amount" label="amount" type="long" />
+          <camunda:formField id="currency" label="currency" type="string" />
+          <camunda:formField id="expiredAt" label="expiredAt" type="date" />
+        </camunda:formData>
+      </bpmn:extensionElements>
+      <bpmn:incoming>ACP_C1</bpmn:incoming>
+      <bpmn:outgoing>ACP_C2</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:userTask id="Task_ReceiveSettlement" name="Receive Settlement Confirmation">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="damlChoice">ReceiveSettlementConfirmation</camunda:inputParameter>
+          <camunda:inputParameter name="damlTemplate">Proc_ClientProcess</camunda:inputParameter>
+          <camunda:inputParameter name="controller">Client</camunda:inputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+      <bpmn:incoming>ACP_C3</bpmn:incoming>
+      <bpmn:outgoing>ACP_C4</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:serviceTask id="Task_LockFunds" name="Lock WrappedUSDC" camunda:type="external" camunda:topic="canton-exercise">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="damlChoice">LockWrappedUSDC</camunda:inputParameter>
+          <camunda:inputParameter name="damlTemplate">Proc_ClientProcess</camunda:inputParameter>
+          <camunda:inputParameter name="controller">Client</camunda:inputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+      <bpmn:incoming>ACP_C2</bpmn:incoming>
+      <bpmn:outgoing>ACP_C3</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:startEvent id="Start_Client" name="Agent Job Needed">
+      <bpmn:outgoing>ACP_C1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:endEvent id="End_Client" name="Job Complete">
+      <bpmn:incoming>ACP_C4</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:serviceTask id="Task_CreateBaseJob" name="Create Job on Base (ERC-8183)" camunda:type="external" camunda:topic="canton-exercise">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="damlChoice">CreateJobOnBaseERC8183</camunda:inputParameter>
+          <camunda:inputParameter name="damlTemplate">Proc_ClientProcess</camunda:inputParameter>
+          <camunda:inputParameter name="controller">Bridge Relay</camunda:inputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+      <bpmn:outgoing>ACP_R1</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="Task_ProveCantonFunding" name="Submit Canton Funding Proof" camunda:type="external" camunda:topic="canton-exercise">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="damlChoice">SubmitCantonFundingProof</camunda:inputParameter>
+          <camunda:inputParameter name="damlTemplate">Proc_ClientProcess</camunda:inputParameter>
+          <camunda:inputParameter name="controller">Bridge Relay</camunda:inputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+      <bpmn:incoming>ACP_R1</bpmn:incoming>
+      <bpmn:outgoing>ACP_R2</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="Task_FundBaseEscrow" name="Fund Base Escrow (USDC)" camunda:type="external" camunda:topic="canton-exercise">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="damlChoice">FundBaseEscrowUSDC</camunda:inputParameter>
+          <camunda:inputParameter name="damlTemplate">Proc_ClientProcess</camunda:inputParameter>
+          <camunda:inputParameter name="controller">Bridge Relay</camunda:inputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+      <bpmn:incoming>ACP_R2</bpmn:incoming>
+      <bpmn:outgoing>ACP_R3</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="Task_ConfirmBridged" name="Confirm Bridged on Canton" camunda:type="external" camunda:topic="canton-exercise">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="damlChoice">ConfirmBridgedOnCanton</camunda:inputParameter>
+          <camunda:inputParameter name="damlTemplate">Proc_ClientProcess</camunda:inputParameter>
+          <camunda:inputParameter name="controller">Bridge Relay</camunda:inputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+      <bpmn:incoming>ACP_R3</bpmn:incoming>
+      <bpmn:outgoing>ACP_R4</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="Task_ConfirmSettled" name="Confirm Settled on Canton" camunda:type="external" camunda:topic="canton-exercise">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="damlChoice">ConfirmSettledOnCanton</camunda:inputParameter>
+          <camunda:inputParameter name="damlTemplate">Proc_ClientProcess</camunda:inputParameter>
+          <camunda:inputParameter name="controller">Bridge Relay</camunda:inputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+      <bpmn:incoming>ACP_R4</bpmn:incoming>
+      <bpmn:outgoing>ACP_R5</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="End_Relay" name="Relay Done">
+      <bpmn:incoming>ACP_R5</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:userTask id="Task_ReceiveJobFunded" name="Receive Funded Job">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="damlChoice">ReceiveFundedJob</camunda:inputParameter>
+          <camunda:inputParameter name="damlTemplate">Proc_ClientProcess</camunda:inputParameter>
+          <camunda:inputParameter name="controller">Provider</camunda:inputParameter>
+        </camunda:inputOutput>
+        <camunda:formData>
+          <camunda:formField id="budget" label="budget" type="long" />
+        </camunda:formData>
+      </bpmn:extensionElements>
+      <bpmn:outgoing>ACP_P1</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:userTask id="Task_SubmitWork" name="Submit Deliverable">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="damlChoice">SubmitDeliverable</camunda:inputParameter>
+          <camunda:inputParameter name="damlTemplate">Proc_ClientProcess</camunda:inputParameter>
+          <camunda:inputParameter name="controller">Provider</camunda:inputParameter>
+        </camunda:inputOutput>
+        <camunda:formData>
+          <camunda:formField id="deliverableHash" label="deliverableHash" type="string" />
+          <camunda:formField id="deliverableUri" label="deliverableUri" type="string" />
+        </camunda:formData>
+      </bpmn:extensionElements>
+      <bpmn:incoming>ACP_P1</bpmn:incoming>
+      <bpmn:outgoing>ACP_P2</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:userTask id="Task_ReceivePayment" name="Receive USDC Payment">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="damlChoice">ReceiveUSDCPayment</camunda:inputParameter>
+          <camunda:inputParameter name="damlTemplate">Proc_ClientProcess</camunda:inputParameter>
+          <camunda:inputParameter name="controller">Provider</camunda:inputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+      <bpmn:incoming>ACP_P2</bpmn:incoming>
+      <bpmn:outgoing>ACP_P3</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:endEvent id="End_Provider" name="Paid">
+      <bpmn:incoming>ACP_P3</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:userTask id="Task_ReviewDeliverable" name="Review Deliverable">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="damlChoice">ReviewDeliverable</camunda:inputParameter>
+          <camunda:inputParameter name="damlTemplate">Proc_ClientProcess</camunda:inputParameter>
+          <camunda:inputParameter name="controller">Evaluator</camunda:inputParameter>
+        </camunda:inputOutput>
+        <camunda:formData>
+          <camunda:formField id="evaluationScore" label="evaluationScore" type="long" />
+          <camunda:formField id="reason" label="reason" type="string" />
+        </camunda:formData>
+      </bpmn:extensionElements>
+      <bpmn:outgoing>ACP_E1</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:serviceTask id="Task_SettleOnBase" name="Complete Job (Release USDC)" camunda:type="external" camunda:topic="canton-exercise">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="damlChoice">CompleteJobReleaseUSDC</camunda:inputParameter>
+          <camunda:inputParameter name="damlTemplate">Proc_ClientProcess</camunda:inputParameter>
+          <camunda:inputParameter name="controller">Evaluator</camunda:inputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+      <bpmn:incoming>ACP_E2a</bpmn:incoming>
+      <bpmn:outgoing>ACP_E3</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="Task_RejectOnBase" name="Reject Job (Refund)" camunda:type="external" camunda:topic="canton-exercise">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="damlChoice">RejectJobRefund</camunda:inputParameter>
+          <camunda:inputParameter name="damlTemplate">Proc_ClientProcess</camunda:inputParameter>
+          <camunda:inputParameter name="controller">Evaluator</camunda:inputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+      <bpmn:incoming>ACP_E2b</bpmn:incoming>
+      <bpmn:outgoing>ACP_E4</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="End_Approved" name="Settled">
+      <bpmn:incoming>ACP_E3</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:endEvent id="End_Rejected" name="Refunded">
+      <bpmn:incoming>ACP_E4</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:exclusiveGateway id="GW_Evaluation" name="Acceptable?">
+      <bpmn:incoming>ACP_E1</bpmn:incoming>
+      <bpmn:outgoing>ACP_E2a</bpmn:outgoing>
+      <bpmn:outgoing>ACP_E2b</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:sequenceFlow id="ACP_C1" sourceRef="Start_Client" targetRef="Task_CreateObligation" />
+    <bpmn:sequenceFlow id="ACP_C2" sourceRef="Task_CreateObligation" targetRef="Task_LockFunds" />
+    <bpmn:sequenceFlow id="ACP_C3" sourceRef="Task_LockFunds" targetRef="Task_ReceiveSettlement" />
+    <bpmn:sequenceFlow id="ACP_C4" sourceRef="Task_ReceiveSettlement" targetRef="End_Client" />
+    <bpmn:sequenceFlow id="ACP_R1" sourceRef="Task_CreateBaseJob" targetRef="Task_ProveCantonFunding" />
+    <bpmn:sequenceFlow id="ACP_R2" sourceRef="Task_ProveCantonFunding" targetRef="Task_FundBaseEscrow" />
+    <bpmn:sequenceFlow id="ACP_R3" sourceRef="Task_FundBaseEscrow" targetRef="Task_ConfirmBridged" />
+    <bpmn:sequenceFlow id="ACP_R4" sourceRef="Task_ConfirmBridged" targetRef="Task_ConfirmSettled" />
+    <bpmn:sequenceFlow id="ACP_R5" sourceRef="Task_ConfirmSettled" targetRef="End_Relay" />
+    <bpmn:sequenceFlow id="ACP_P1" sourceRef="Task_ReceiveJobFunded" targetRef="Task_SubmitWork" />
+    <bpmn:sequenceFlow id="ACP_P2" sourceRef="Task_SubmitWork" targetRef="Task_ReceivePayment" />
+    <bpmn:sequenceFlow id="ACP_P3" sourceRef="Task_ReceivePayment" targetRef="End_Provider" />
+    <bpmn:sequenceFlow id="ACP_E1" sourceRef="Task_ReviewDeliverable" targetRef="GW_Evaluation" />
+    <bpmn:sequenceFlow id="ACP_E2a" sourceRef="GW_Evaluation" targetRef="Task_SettleOnBase" name="Yes" />
+    <bpmn:sequenceFlow id="ACP_E2b" sourceRef="GW_Evaluation" targetRef="Task_RejectOnBase" name="No" />
+    <bpmn:sequenceFlow id="ACP_E3" sourceRef="Task_SettleOnBase" targetRef="End_Approved" />
+    <bpmn:sequenceFlow id="ACP_E4" sourceRef="Task_RejectOnBase" targetRef="End_Rejected" />
+  </bpmn:process>
+</bpmn:definitions>

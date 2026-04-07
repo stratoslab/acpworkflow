@@ -1,0 +1,138 @@
+-- CantonFlow Auto-Generated Asset Module
+-- CIP-56 Token Standard compliant — uses Daml Finance V4 types
+-- Requires: ./scripts/get-dependencies.sh (downloads Daml Finance DARs)
+-- Reference: https://docs.daml.com/daml-finance/concepts/asset-model.html
+
+module Assets where
+
+-- Daml Finance V4 imports
+import Daml.Finance.Interface.Types.Common.Types (AccountKey(..), InstrumentKey(..), Id(..), Parties, PartiesMap, HoldingStandard(..))
+import Daml.Finance.Interface.Util.Lockable qualified as Lockable (Lock(..), LockType(..))
+import Daml.Finance.Interface.Holding.Fungible qualified as Fungible (SplitResult(..))
+
+-- | Instrument: describes economic terms of WrappedUSDC
+-- Mirrors Daml.Finance.Interface.Instrument.Token
+template WrappedUSDCInstrument
+  with
+    depository : Party
+    bridge Relay : Party
+    id : Id
+    version : Text
+    holdingStandard : HoldingStandard
+    description : Text
+    validAsOf : Time
+    amount : Decimal
+    currency : Text
+  where
+    signatory depository, bridge Relay
+
+-- | Holding: ownership of WrappedUSDC at an account
+-- HoldingStandard: TransferableFungible
+-- Implements:
+--   Daml.Finance.Interface.Holding.Holding (base view)
+--   Daml.Finance.Interface.Holding.Transferable (Transfer)
+--   Daml.Finance.Interface.Holding.Fungible (Split, Merge)
+--   Daml.Finance.Interface.Util.Lockable (Acquire, Release)
+template WrappedUSDCHolding
+  with
+    instrument : InstrumentKey
+    account : AccountKey
+    amount : Decimal
+    lock : Optional Lockable.Lock
+    observers : PartiesMap
+  where
+    signatory account.custodian, account.owner
+    ensure amount > 0.0
+
+    nonconsuming choice GetView : (InstrumentKey, AccountKey, Decimal)
+      with
+        viewer : Party
+      controller viewer
+      do return (instrument, account, amount)
+
+    -- | Credit: creates a new holding (Daml Finance Account.Credit pattern)
+    nonconsuming choice Credit : ContractId WrappedUSDCHolding
+      with
+        creditAmount : Decimal
+      controller account.custodian
+      do
+        create WrappedUSDCHolding with
+          instrument
+          account
+          amount = creditAmount
+          lock = None
+          observers
+
+    -- | Debit: archives a holding (Daml Finance Account.Debit / burn pattern)
+    choice Debit : ()
+      with
+        holdingCid : ContractId WrappedUSDCHolding
+      controller account.custodian
+      do
+        archive holdingCid
+
+    -- | Transfer: moves holding to a new owner account
+    -- Daml.Finance.Interface.Holding.Transferable.Transfer
+    choice Transfer : ContractId WrappedUSDCHolding
+      with
+        actors : Parties
+        newOwnerAccount : AccountKey
+      controller actors
+      do
+        assertMsg "Holding is locked" (lock == None)
+        create this with
+          account = newOwnerAccount
+
+    -- | Split: divides holding into specified amounts
+    -- Daml.Finance.Interface.Holding.Fungible.Split
+    choice Split : Fungible.SplitResult WrappedUSDCHolding
+      with
+        amounts : [Decimal]
+      controller account.owner
+      do
+        assertMsg "Holding is locked" (lock == None)
+        let totalSplit = foldl (+) 0.0 amounts
+        assertMsg "Split amounts exceed holding" (totalSplit <= amount)
+        splitCids <- forA amounts (\a -> create this with amount = a)
+        let remaining = amount - totalSplit
+        restCid <- if remaining > 0.0
+          then Some <$> create this with amount = remaining
+          else pure None
+        return Fungible.SplitResult with ..
+
+    -- | Merge: combines multiple holdings into one
+    -- Daml.Finance.Interface.Holding.Fungible.Merge
+    choice Merge : ContractId WrappedUSDCHolding
+      with
+        holdingCids : [ContractId WrappedUSDCHolding]
+      controller account.owner
+      do
+        mergedAmount <- foldlA (\acc cid -> do
+          h <- fetch cid
+          archive cid
+          pure (acc + h.amount)) amount holdingCids
+        create this with amount = mergedAmount
+
+    -- | Acquire: locks the holding
+    -- Daml.Finance.Interface.Util.Lockable.Acquire
+    choice Acquire : ContractId WrappedUSDCHolding
+      with
+        newLockers : Parties
+        context : Text
+        lockType : Lockable.LockType
+      controller account.owner, newLockers
+      do
+        assertMsg "Already locked" (lock == None)
+        create this with lock = Some Lockable.Lock with
+          lockers = newLockers
+          context = fromList [context]
+          lockType
+
+    -- | Release: unlocks the holding
+    -- Daml.Finance.Interface.Util.Lockable.Release
+    choice Release : ContractId WrappedUSDCHolding
+      with
+        releaseContext : Text
+      controller (optional [] (\l -> l.lockers) lock)
+      do
+        create this with lock = None

@@ -1,0 +1,284 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:canton="https://cantonflow.dev/bpmn/canton/1.0" id="Definitions_ACP" targetNamespace="http://cantonflow.io/schema/bpmn">
+  <bpmn:collaboration id="Collab_ACP">
+    <bpmn:participant id="Part_Client" name="Client" processRef="Proc_Client" />
+    <bpmn:participant id="Part_Relay" name="Bridge Relay" processRef="Proc_Relay" />
+    <bpmn:participant id="Part_Provider" name="Provider" processRef="Proc_Provider" />
+    <bpmn:participant id="Part_Evaluator" name="Evaluator" processRef="Proc_Evaluator" />
+    <bpmn:messageFlow id="ACP_MF1" sourceRef="Task_CreateObligation" targetRef="Task_CreateBaseJob" />
+    <bpmn:messageFlow id="ACP_MF2" sourceRef="Task_LockFunds" targetRef="Task_ProveCantonFunding" />
+    <bpmn:messageFlow id="ACP_MF3" sourceRef="Task_FundBaseEscrow" targetRef="Task_ReceiveJobFunded" />
+    <bpmn:messageFlow id="ACP_MF4" sourceRef="Task_SubmitWork" targetRef="Task_ReviewDeliverable" />
+    <bpmn:messageFlow id="ACP_MF5" sourceRef="Task_SettleOnBase" targetRef="Task_ConfirmSettled" />
+  </bpmn:collaboration>
+  <bpmn:process id="Proc_Client" isExecutable="true">
+    <bpmn:startEvent id="Start_Client" name="Agent Job Needed" />
+    <bpmn:userTask id="Task_CreateObligation" name="Create Payment Obligation">
+      <bpmn:extensionElements>
+        <canton:properties signatories="Client" controllers="Client" observers="Provider,Evaluator,Bridge Relay" templateFields="[{&#34;name&#34;:&#34;description&#34;,&#34;type&#34;:&#34;Text&#34;},{&#34;name&#34;:&#34;amount&#34;,&#34;type&#34;:&#34;Decimal&#34;},{&#34;name&#34;:&#34;currency&#34;,&#34;type&#34;:&#34;Text&#34;},{&#34;name&#34;:&#34;expiredAt&#34;,&#34;type&#34;:&#34;Time&#34;}]" />
+      </bpmn:extensionElements>
+    </bpmn:userTask>
+    <bpmn:serviceTask id="Task_LockFunds" name="Lock WrappedUSDC">
+      <bpmn:extensionElements>
+        <canton:properties signatories="Client" controllers="Client" observers="Bridge Relay" templateFields="[]" assetOperation="{&#34;assetId&#34;:&#34;wrappedUSDC&#34;,&#34;operation&#34;:&#34;lock&#34;,&#34;params&#34;:{}}" />
+      </bpmn:extensionElements>
+    </bpmn:serviceTask>
+    <bpmn:userTask id="Task_ReceiveSettlement" name="Receive Settlement Confirmation">
+      <bpmn:extensionElements>
+        <canton:properties signatories="Client" controllers="Client" observers="" templateFields="[]" />
+      </bpmn:extensionElements>
+    </bpmn:userTask>
+    <bpmn:endEvent id="End_Client" name="Job Complete" />
+    <bpmn:sequenceFlow id="ACP_C1" sourceRef="Start_Client" targetRef="Task_CreateObligation" />
+    <bpmn:sequenceFlow id="ACP_C2" sourceRef="Task_CreateObligation" targetRef="Task_LockFunds" />
+    <bpmn:sequenceFlow id="ACP_C3" sourceRef="Task_LockFunds" targetRef="Task_ReceiveSettlement" />
+    <bpmn:sequenceFlow id="ACP_C4" sourceRef="Task_ReceiveSettlement" targetRef="End_Client" />
+  </bpmn:process>
+  <bpmn:process id="Proc_Relay" isExecutable="true">
+    <bpmn:serviceTask id="Task_CreateBaseJob" name="Create Job on Base (ERC-8183)">
+      <bpmn:extensionElements>
+        <canton:properties signatories="Bridge Relay" controllers="Bridge Relay" observers="Client,Provider" templateFields="[{&#34;name&#34;:&#34;baseJobId&#34;,&#34;type&#34;:&#34;Int&#34;},{&#34;name&#34;:&#34;cantonObligationId&#34;,&#34;type&#34;:&#34;Text&#34;}]" />
+      </bpmn:extensionElements>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="Task_ProveCantonFunding" name="Submit Canton Funding Proof">
+      <bpmn:extensionElements>
+        <canton:properties signatories="Bridge Relay" controllers="Bridge Relay" observers="" templateFields="[{&#34;name&#34;:&#34;relaySignature&#34;,&#34;type&#34;:&#34;Text&#34;}]" />
+      </bpmn:extensionElements>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="Task_FundBaseEscrow" name="Fund Base Escrow (USDC)">
+      <bpmn:extensionElements>
+        <canton:properties signatories="Bridge Relay" controllers="Bridge Relay" observers="Provider" templateFields="[{&#34;name&#34;:&#34;usdcAmount&#34;,&#34;type&#34;:&#34;Decimal&#34;}]" assetOperation="{&#34;assetId&#34;:&#34;wrappedUSDC&#34;,&#34;operation&#34;:&#34;transfer&#34;,&#34;params&#34;:{&#34;newOwner&#34;:&#34;Provider&#34;}}" />
+      </bpmn:extensionElements>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="Task_ConfirmBridged" name="Confirm Bridged on Canton">
+      <bpmn:extensionElements>
+        <canton:properties signatories="Bridge Relay" controllers="Bridge Relay" observers="Client" templateFields="[{&#34;name&#34;:&#34;baseJobId&#34;,&#34;type&#34;:&#34;Int&#34;}]" />
+      </bpmn:extensionElements>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="Task_ConfirmSettled" name="Confirm Settled on Canton">
+      <bpmn:extensionElements>
+        <canton:properties signatories="Bridge Relay" controllers="Bridge Relay" observers="Client" templateFields="[]" />
+      </bpmn:extensionElements>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="End_Relay" name="Relay Done" />
+    <bpmn:sequenceFlow id="ACP_R1" sourceRef="Task_CreateBaseJob" targetRef="Task_ProveCantonFunding" />
+    <bpmn:sequenceFlow id="ACP_R2" sourceRef="Task_ProveCantonFunding" targetRef="Task_FundBaseEscrow" />
+    <bpmn:sequenceFlow id="ACP_R3" sourceRef="Task_FundBaseEscrow" targetRef="Task_ConfirmBridged" />
+    <bpmn:sequenceFlow id="ACP_R4" sourceRef="Task_ConfirmBridged" targetRef="Task_ConfirmSettled" />
+    <bpmn:sequenceFlow id="ACP_R5" sourceRef="Task_ConfirmSettled" targetRef="End_Relay" />
+  </bpmn:process>
+  <bpmn:process id="Proc_Provider" isExecutable="true">
+    <bpmn:userTask id="Task_ReceiveJobFunded" name="Receive Funded Job">
+      <bpmn:extensionElements>
+        <canton:properties signatories="Provider" controllers="Provider" observers="Client,Evaluator" templateFields="[{&#34;name&#34;:&#34;budget&#34;,&#34;type&#34;:&#34;Decimal&#34;}]" />
+      </bpmn:extensionElements>
+    </bpmn:userTask>
+    <bpmn:userTask id="Task_SubmitWork" name="Submit Deliverable">
+      <bpmn:extensionElements>
+        <canton:properties signatories="Provider" controllers="Provider" observers="Evaluator" templateFields="[{&#34;name&#34;:&#34;deliverableHash&#34;,&#34;type&#34;:&#34;Text&#34;},{&#34;name&#34;:&#34;deliverableUri&#34;,&#34;type&#34;:&#34;Text&#34;}]" />
+      </bpmn:extensionElements>
+    </bpmn:userTask>
+    <bpmn:userTask id="Task_ReceivePayment" name="Receive USDC Payment">
+      <bpmn:extensionElements>
+        <canton:properties signatories="Provider" controllers="Provider" observers="" templateFields="[]" />
+      </bpmn:extensionElements>
+    </bpmn:userTask>
+    <bpmn:endEvent id="End_Provider" name="Paid" />
+    <bpmn:sequenceFlow id="ACP_P1" sourceRef="Task_ReceiveJobFunded" targetRef="Task_SubmitWork" />
+    <bpmn:sequenceFlow id="ACP_P2" sourceRef="Task_SubmitWork" targetRef="Task_ReceivePayment" />
+    <bpmn:sequenceFlow id="ACP_P3" sourceRef="Task_ReceivePayment" targetRef="End_Provider" />
+  </bpmn:process>
+  <bpmn:process id="Proc_Evaluator" isExecutable="true">
+    <bpmn:userTask id="Task_ReviewDeliverable" name="Review Deliverable">
+      <bpmn:extensionElements>
+        <canton:properties signatories="Evaluator" controllers="Evaluator" observers="Provider,Client" templateFields="[{&#34;name&#34;:&#34;evaluationScore&#34;,&#34;type&#34;:&#34;Int&#34;},{&#34;name&#34;:&#34;reason&#34;,&#34;type&#34;:&#34;Text&#34;}]" />
+      </bpmn:extensionElements>
+    </bpmn:userTask>
+    <bpmn:exclusiveGateway id="GW_Evaluation" name="Acceptable?" />
+    <bpmn:serviceTask id="Task_SettleOnBase" name="Complete Job (Release USDC)">
+      <bpmn:extensionElements>
+        <canton:properties signatories="Evaluator" controllers="Evaluator" observers="Provider,Bridge Relay" templateFields="[{&#34;name&#34;:&#34;providerPayout&#34;,&#34;type&#34;:&#34;Decimal&#34;},{&#34;name&#34;:&#34;platformFee&#34;,&#34;type&#34;:&#34;Decimal&#34;},{&#34;name&#34;:&#34;evaluatorFee&#34;,&#34;type&#34;:&#34;Decimal&#34;}]" />
+      </bpmn:extensionElements>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="Task_RejectOnBase" name="Reject Job (Refund)">
+      <bpmn:extensionElements>
+        <canton:properties signatories="Evaluator" controllers="Evaluator" observers="Client,Bridge Relay" templateFields="[{&#34;name&#34;:&#34;rejectionReason&#34;,&#34;type&#34;:&#34;Text&#34;}]" />
+      </bpmn:extensionElements>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="End_Approved" name="Settled" />
+    <bpmn:endEvent id="End_Rejected" name="Refunded" />
+    <bpmn:sequenceFlow id="ACP_E1" sourceRef="Task_ReviewDeliverable" targetRef="GW_Evaluation" />
+    <bpmn:sequenceFlow id="ACP_E2a" name="Yes" sourceRef="GW_Evaluation" targetRef="Task_SettleOnBase" />
+    <bpmn:sequenceFlow id="ACP_E2b" name="No" sourceRef="GW_Evaluation" targetRef="Task_RejectOnBase" />
+    <bpmn:sequenceFlow id="ACP_E3" sourceRef="Task_SettleOnBase" targetRef="End_Approved" />
+    <bpmn:sequenceFlow id="ACP_E4" sourceRef="Task_RejectOnBase" targetRef="End_Rejected" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_ACP">
+    <bpmndi:BPMNPlane id="BPMNPlane_ACP" bpmnElement="Collab_ACP">
+      <bpmndi:BPMNShape id="Part_Client_di" bpmnElement="Part_Client" isHorizontal="true">
+        <dc:Bounds x="120" y="60" width="1550" height="140" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Start_Client_di" bpmnElement="Start_Client">
+        <dc:Bounds x="192" y="112" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_CreateObligation_di" bpmnElement="Task_CreateObligation">
+        <dc:Bounds x="300" y="90" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_LockFunds_di" bpmnElement="Task_LockFunds">
+        <dc:Bounds x="520" y="90" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_ReceiveSettlement_di" bpmnElement="Task_ReceiveSettlement">
+        <dc:Bounds x="1100" y="90" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_Client_di" bpmnElement="End_Client">
+        <dc:Bounds x="1320" y="112" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="ACP_C1_di" bpmnElement="ACP_C1">
+        <di:waypoint x="228" y="130" />
+        <di:waypoint x="300" y="130" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ACP_C2_di" bpmnElement="ACP_C2">
+        <di:waypoint x="450" y="130" />
+        <di:waypoint x="520" y="130" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ACP_C3_di" bpmnElement="ACP_C3">
+        <di:waypoint x="670" y="130" />
+        <di:waypoint x="1100" y="130" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ACP_C4_di" bpmnElement="ACP_C4">
+        <di:waypoint x="1250" y="130" />
+        <di:waypoint x="1320" y="130" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="Part_Relay_di" bpmnElement="Part_Relay" isHorizontal="true">
+        <dc:Bounds x="120" y="260" width="1550" height="140" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_CreateBaseJob_di" bpmnElement="Task_CreateBaseJob">
+        <dc:Bounds x="300" y="290" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_ProveCantonFunding_di" bpmnElement="Task_ProveCantonFunding">
+        <dc:Bounds x="520" y="290" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_FundBaseEscrow_di" bpmnElement="Task_FundBaseEscrow">
+        <dc:Bounds x="740" y="290" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_ConfirmBridged_di" bpmnElement="Task_ConfirmBridged">
+        <dc:Bounds x="960" y="290" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_ConfirmSettled_di" bpmnElement="Task_ConfirmSettled">
+        <dc:Bounds x="1180" y="290" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_Relay_di" bpmnElement="End_Relay">
+        <dc:Bounds x="1400" y="312" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="ACP_R1_di" bpmnElement="ACP_R1">
+        <di:waypoint x="450" y="330" />
+        <di:waypoint x="520" y="330" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ACP_R2_di" bpmnElement="ACP_R2">
+        <di:waypoint x="670" y="330" />
+        <di:waypoint x="740" y="330" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ACP_R3_di" bpmnElement="ACP_R3">
+        <di:waypoint x="890" y="330" />
+        <di:waypoint x="960" y="330" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ACP_R4_di" bpmnElement="ACP_R4">
+        <di:waypoint x="1110" y="330" />
+        <di:waypoint x="1180" y="330" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ACP_R5_di" bpmnElement="ACP_R5">
+        <di:waypoint x="1330" y="330" />
+        <di:waypoint x="1400" y="330" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="Part_Provider_di" bpmnElement="Part_Provider" isHorizontal="true">
+        <dc:Bounds x="120" y="460" width="1550" height="140" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_ReceiveJobFunded_di" bpmnElement="Task_ReceiveJobFunded">
+        <dc:Bounds x="740" y="490" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_SubmitWork_di" bpmnElement="Task_SubmitWork">
+        <dc:Bounds x="960" y="490" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_ReceivePayment_di" bpmnElement="Task_ReceivePayment">
+        <dc:Bounds x="1180" y="490" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_Provider_di" bpmnElement="End_Provider">
+        <dc:Bounds x="1400" y="512" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="ACP_P1_di" bpmnElement="ACP_P1">
+        <di:waypoint x="890" y="530" />
+        <di:waypoint x="960" y="530" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ACP_P2_di" bpmnElement="ACP_P2">
+        <di:waypoint x="1110" y="530" />
+        <di:waypoint x="1180" y="530" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ACP_P3_di" bpmnElement="ACP_P3">
+        <di:waypoint x="1330" y="530" />
+        <di:waypoint x="1400" y="530" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="Part_Evaluator_di" bpmnElement="Part_Evaluator" isHorizontal="true">
+        <dc:Bounds x="120" y="660" width="1550" height="200" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_ReviewDeliverable_di" bpmnElement="Task_ReviewDeliverable">
+        <dc:Bounds x="960" y="690" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="GW_Evaluation_di" bpmnElement="GW_Evaluation" isMarkerVisible="true">
+        <dc:Bounds x="1170" y="705" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_SettleOnBase_di" bpmnElement="Task_SettleOnBase">
+        <dc:Bounds x="1280" y="690" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_RejectOnBase_di" bpmnElement="Task_RejectOnBase">
+        <dc:Bounds x="1280" y="790" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_Approved_di" bpmnElement="End_Approved">
+        <dc:Bounds x="1490" y="712" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_Rejected_di" bpmnElement="End_Rejected">
+        <dc:Bounds x="1490" y="812" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="ACP_E1_di" bpmnElement="ACP_E1">
+        <di:waypoint x="1110" y="730" />
+        <di:waypoint x="1170" y="730" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ACP_E2a_di" bpmnElement="ACP_E2a">
+        <di:waypoint x="1220" y="730" />
+        <di:waypoint x="1280" y="730" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ACP_E2b_di" bpmnElement="ACP_E2b">
+        <di:waypoint x="1195" y="755" />
+        <di:waypoint x="1195" y="830" />
+        <di:waypoint x="1280" y="830" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ACP_E3_di" bpmnElement="ACP_E3">
+        <di:waypoint x="1430" y="730" />
+        <di:waypoint x="1490" y="730" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ACP_E4_di" bpmnElement="ACP_E4">
+        <di:waypoint x="1430" y="830" />
+        <di:waypoint x="1490" y="830" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ACP_MF1_di" bpmnElement="ACP_MF1">
+        <di:waypoint x="375" y="170" />
+        <di:waypoint x="375" y="290" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ACP_MF2_di" bpmnElement="ACP_MF2">
+        <di:waypoint x="595" y="170" />
+        <di:waypoint x="595" y="290" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ACP_MF3_di" bpmnElement="ACP_MF3">
+        <di:waypoint x="815" y="370" />
+        <di:waypoint x="815" y="490" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ACP_MF4_di" bpmnElement="ACP_MF4">
+        <di:waypoint x="1035" y="570" />
+        <di:waypoint x="1035" y="690" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ACP_MF5_di" bpmnElement="ACP_MF5">
+        <di:waypoint x="1355" y="690" />
+        <di:waypoint x="1255" y="370" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

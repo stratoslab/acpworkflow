@@ -1,0 +1,10 @@
+{
+  "name": "proc_client-camunda-worker",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "node worker.js"
+  },
+  "dependencies": {
+    "camunda-external-task-client-js": "^3.0.0"
+  }
+}

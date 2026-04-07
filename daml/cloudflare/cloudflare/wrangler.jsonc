@@ -1,0 +1,15 @@
+{
+  "name": "proc_client-workflow",
+  "compatibility_date": "2025-01-01",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "workflows": [
+    {
+      "name": "proc_client",
+      "binding": "WORKFLOW",
+      "class_name": "ProcClientWorkflow",
+      "script_name": "proc_client-workflow"
+    }
+  ]
+}
